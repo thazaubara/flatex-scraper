@@ -1,3 +1,6 @@
+import sys
+import time
+
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -17,6 +20,7 @@ DB_USER = credentials.DB_USER
 DB_PASS = credentials.DB_PASS
 FLATEX_USER = credentials.FLATEX_USER
 FLATEX_PASS = credentials.FLATEX_PASS
+HEADLESS = False
 
 class Position:
     def __init__(self):
@@ -90,25 +94,41 @@ def scrape_flatex(headless=False):
     else:
         driver = webdriver.Chrome()
 
-    base_url = "https://konto.flatex.at"
+    # GO TO SITE
+    base_url = "https://flatex.at"
     print(f"Loading {base_url}")
     driver.get(base_url)
+    # time.sleep(2)
 
-    # txt_username = driver.find_element(By.CSS_SELECTOR, "#loginForm_userId")
-    txt_username = WebDriverWait(driver, timeout).until(EC.visibility_of_element_located((By.CSS_SELECTOR, "#loginForm_userId")))
+    # CLICK LOGIN, WAIT FOR POPUP#
+    openpopup = WebDriverWait(driver, timeout).until(EC.visibility_of_element_located((By.CSS_SELECTOR, "#pageHeader > div.inner > div:nth-child(3) > div.toggleWrapper > a")))
+    # openpopup = driver.find_element(By.CSS_SELECTOR, "#pageHeader > div.inner > div:nth-child(3) > div.toggleWrapper > a")
+    openpopup.click()
+    # time.sleep(2)
+
+    # FILL CREDENTIALS IN POPUP
+    txt_username = WebDriverWait(driver, timeout).until(EC.visibility_of_element_located((By.CSS_SELECTOR, "#uname_app")))
     txt_username.send_keys(FLATEX_USER)
-    txt_password = driver.find_element(By.CSS_SELECTOR, "#loginForm_pin")
+    txt_password = driver.find_element(By.CSS_SELECTOR, "#password_app")
     txt_password.send_keys(FLATEX_PASS)
-    # driver.save_screenshot("screenshot_login_form.png")
-    # txt_password.send_keys(Keys.RETURN)
-    loginbutton = driver.find_element(By.CSS_SELECTOR, "#loginForm_loginButton")
+    loginbutton = driver.find_element(By.CSS_SELECTOR, "#webfiliale_login > div:nth-child(5) > button")
     loginbutton.click()
-    print("Clicked login button.")
-    # driver.save_screenshot("screenshot_after_login.png")
+    time.sleep(10)
+
+    # DEPOTBESTAND SITE
+    #depotbestand_selector = "#depositStatementForm_pull2RefreshPanel > div > div:nth-child(1) > div.DepositSelection.WithoutCashAccount.ClearFix > div.Details > table > tbody > tr:nth-child(1) > td.Value > span"
+    #depotbestand_selector = "#titleAnchor"
+    #driver.save_screenshot("screenshot_login_form.png")
+    #print("DEPOTBESTAND GEÖFFNET")
+    ## amount = WebDriverWait(driver, timeout).until(EC.visibility_of_element_located((By.CSS_SELECTOR, depotbestand_selector)))
+    #amount = driver.find_element(By.CSS_SELECTOR, depotbestand_selector)
+    # title = WebDriverWait(driver, timeout).until(EC.visibility_of_element_located((By.ID, "titleAnchor")))
+    #print(f"Depotbestand: {amount.text}:")
 
     driver.get("https://konto.flatex.at/banking-flatex.at/depositStatementFormAction.do")
     title = WebDriverWait(driver, timeout).until(EC.visibility_of_element_located((By.ID, "titleAnchor")))
     print(f"{title.text}:")
+
 
     positions = []
 
@@ -163,7 +183,7 @@ def scrape_flatex(headless=False):
     return positions
 
 # SCRAPE FLATEX
-current_positions = scrape_flatex(headless=True)
+current_positions = scrape_flatex(headless=HEADLESS)
 
 for position in current_positions:
     position.print_all()
