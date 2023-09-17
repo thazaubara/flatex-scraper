@@ -11,6 +11,7 @@ import mysql.connector as mariadb
 from mysql.connector import Error
 
 # https://www.youtube.com/watch?v=Xjv1sY630Uc&list=PLzMcBGfZo4-n40rB1XaJ0ak1bemvlqumQ
+# https://selenium-python.readthedocs.io/index.html
 import credentials
 
 DB_HOST = credentials.DB_HOST
@@ -20,7 +21,7 @@ DB_USER = credentials.DB_USER
 DB_PASS = credentials.DB_PASS
 FLATEX_USER = credentials.FLATEX_USER
 FLATEX_PASS = credentials.FLATEX_PASS
-HEADLESS = False
+HEADLESS = True
 
 class Position:
     def __init__(self):
@@ -72,6 +73,10 @@ class Position:
 
         return execstring
 
+def STOPHERE():
+    while(True):
+        time.sleep(10)
+
 def info():
     execstring = f"SELECT table_schema 'DB Name',table_rows,ROUND(SUM(data_length + index_length) / 1024 / 1024, 1) 'DB Size in MB' FROM information_schema.tables WHERE table_schema = '{credentials.DB_NAME}'"
     cursor.execute(execstring)
@@ -83,28 +88,58 @@ def info():
 def scrape_flatex(headless=False):
     timeout = 5
 
+    options = webdriver.ChromeOptions()
+    options.add_argument("user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36")
+    options.add_argument("--window-size=1300,800")
+
+
     if headless:
-        options = webdriver.ChromeOptions()
-        options.add_argument("--window-size=1280,800")
         options.add_argument("--start-maximized")
         options.add_argument("--headless")
 
-        driver = webdriver.Chrome(options=options)
-        # driver.set_window_size(1920, 1080)
-    else:
-        driver = webdriver.Chrome()
+    driver = webdriver.Chrome(options=options)
+
+
+    width = driver.get_window_size().get("width")
+    height = driver.get_window_size().get("height")
+    print(f"driver set to {width}x{height}")
 
     # GO TO SITE
     base_url = "https://flatex.at"
     print(f"Loading {base_url}")
     driver.get(base_url)
+
+    time.sleep(2)
+
+
+    # CHECK FOR COOKIE BANNER
+    try:
+        accept_cookie_button = driver.find_element(By.CSS_SELECTOR, "#SgCookieOptin > div > div > div:nth-child(4) > button")
+        print("found cookie banner.")
+        accept_cookie_button.click()
+        print("clicked cookie banner.")
+    except:
+        print("no cookie banner here.")
+
+
+    # CLICK LOGIN, WAIT FOR POPUP
+    openpopup = driver.find_element(By.CSS_SELECTOR, "#pageHeader > div.inner > div:nth-child(3) > div.toggleWrapper > a")
+    print("desktop loginbutton found!")
+    #openpopup = driver.find_element(By.CSS_SELECTOR, "#pageHeader > div.inner > div:nth-child(3) > a.mobileLogin > svg")
+    #print("mobile loginbutton found!")
+    openpopup.click()
+
+
+
+
+
+    if not openpopup:
+        print("no loginbutton found!")
+        sys.exit()
+
+
     # time.sleep(2)
 
-    # CLICK LOGIN, WAIT FOR POPUP#
-    openpopup = WebDriverWait(driver, timeout).until(EC.visibility_of_element_located((By.CSS_SELECTOR, "#pageHeader > div.inner > div:nth-child(3) > div.toggleWrapper > a")))
-    # openpopup = driver.find_element(By.CSS_SELECTOR, "#pageHeader > div.inner > div:nth-child(3) > div.toggleWrapper > a")
-    openpopup.click()
-    # time.sleep(2)
 
     # FILL CREDENTIALS IN POPUP
     txt_username = WebDriverWait(driver, timeout).until(EC.visibility_of_element_located((By.CSS_SELECTOR, "#uname_app")))
@@ -113,7 +148,7 @@ def scrape_flatex(headless=False):
     txt_password.send_keys(FLATEX_PASS)
     loginbutton = driver.find_element(By.CSS_SELECTOR, "#webfiliale_login > div:nth-child(5) > button")
     loginbutton.click()
-    time.sleep(10)
+    time.sleep(5)
 
     # DEPOTBESTAND SITE
     #depotbestand_selector = "#depositStatementForm_pull2RefreshPanel > div > div:nth-child(1) > div.DepositSelection.WithoutCashAccount.ClearFix > div.Details > table > tbody > tr:nth-child(1) > td.Value > span"
