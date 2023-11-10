@@ -21,7 +21,9 @@ DB_USER = credentials.DB_USER
 DB_PASS = credentials.DB_PASS
 FLATEX_USER = credentials.FLATEX_USER
 FLATEX_PASS = credentials.FLATEX_PASS
-HEADLESS = True
+HEADLESS = False
+
+utc_timestamp = datetime.utcnow()
 
 class Position:
     def __init__(self):
@@ -65,7 +67,6 @@ class Position:
 
     def generate_execstring(self):
         table = credentials.DB_TABLE
-        utc_timestamp = datetime.utcnow()
         utc_date = self.datum.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")
 
         execstring = f"INSERT INTO `{table}` (`timestamp_utc`, `date_utc`, `bezeichnung`, `isin`, `wkn`, `kategorie`, `stk`, `einstandskurs`, `lagersts`, `boerse`, `letzter_kurs`, `vortag`, `vortag_perc`, `aktueller_wert`, `einstandswert`, `entwicklung_abs`, `entwicklung_perc`) " \
@@ -73,9 +74,8 @@ class Position:
 
         return execstring
 
-def STOPHERE():
-    while(True):
-        time.sleep(10)
+def STOPHERE(text=""):
+    pressed = input(f"STOPPING HERE -> {text}")
 
 def info():
     execstring = f"SELECT table_schema 'DB Name',table_rows,ROUND(SUM(data_length + index_length) / 1024 / 1024, 1) 'DB Size in MB' FROM information_schema.tables WHERE table_schema = '{credentials.DB_NAME}'"
@@ -86,12 +86,13 @@ def info():
     return records, size_mb
 
 def scrape_flatex(headless=False):
-    timeout = 5
+    timeout = 2
 
     options = webdriver.ChromeOptions()
     options.add_argument("user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36")
-    options.add_argument("--window-size=1300,800")
+    options.add_argument("--window-size=1400,1000")
 
+    options.add_argument("--window-position=1800,0")  # just for testing, open window on other screen
 
     if headless:
         options.add_argument("--start-maximized")
@@ -106,49 +107,41 @@ def scrape_flatex(headless=False):
 
     # GO TO SITE
     base_url = "https://flatex.at"
+    # base_url = "https://konto.flatex.at/login.at/loginIFrameFormAction.do"
     print(f"Loading {base_url}")
     driver.get(base_url)
 
-    time.sleep(2)
-
+    STOPHERE("before cookie banner check")
 
     # CHECK FOR COOKIE BANNER
-    try:
-        accept_cookie_button = driver.find_element(By.CSS_SELECTOR, "#SgCookieOptin > div > div > div:nth-child(4) > button")
+    cookie_banner = WebDriverWait(driver, timeout).until(EC.visibility_of_element_located((By.ID, "SgCookieOptin")))
+    if cookie_banner:
         print("found cookie banner.")
-        accept_cookie_button.click()
-        print("clicked cookie banner.")
-    except:
+        driver.execute_script("""var l = document.getElementById("SgCookieOptin"); l.parentNode.removeChild(l);""")  # FUCK YOU COOKIE BANNER
+        print("removed cookie banner.")
+    else:
         print("no cookie banner here.")
 
+    # STOPHERE("before showing login window")
 
     # CLICK LOGIN, WAIT FOR POPUP
-    openpopup = driver.find_element(By.CSS_SELECTOR, "#pageHeader > div.inner > div:nth-child(3) > div.toggleWrapper > a")
-    print("desktop loginbutton found!")
-    #openpopup = driver.find_element(By.CSS_SELECTOR, "#pageHeader > div.inner > div:nth-child(3) > a.mobileLogin > svg")
-    #print("mobile loginbutton found!")
-    openpopup.click()
+    open_login = driver.find_element(By.CSS_SELECTOR, "#pageHeader > div.inner > div:nth-child(3) > div.toggleWrapper > a")
+    open_login.click()
 
-
-
-
-
-    if not openpopup:
-        print("no loginbutton found!")
-        sys.exit()
-
-
-    # time.sleep(2)
-
+    STOPHERE("before login fill")
 
     # FILL CREDENTIALS IN POPUP
-    txt_username = WebDriverWait(driver, timeout).until(EC.visibility_of_element_located((By.CSS_SELECTOR, "#uname_app")))
+    # loginIFrameForm_txtUserId
+    txt_username = WebDriverWait(driver, timeout).until(EC.visibility_of_element_located((By.CSS_SELECTOR, "#loginIFrameForm_txtUserId")))
+    # txt_username = WebDriverWait(driver, timeout).until(EC.visibility_of_element_located((By.ID, "loginIFrameForm_txtUserId")))
     txt_username.send_keys(FLATEX_USER)
-    txt_password = driver.find_element(By.CSS_SELECTOR, "#password_app")
-    txt_password.send_keys(FLATEX_PASS)
-    loginbutton = driver.find_element(By.CSS_SELECTOR, "#webfiliale_login > div:nth-child(5) > button")
-    loginbutton.click()
-    time.sleep(5)
+    #txt_password = driver.find_element(By.ID, "loginIFrameForm_txtPassword")
+    #txt_password.send_keys(FLATEX_PASS)
+    #loginbutton = driver.find_element(By.ID, "btnSubmitForm")
+    #loginbutton.click()
+    # time.sleep(5)
+
+    STOPHERE("after login fill")
 
     # DEPOTBESTAND SITE
     #depotbestand_selector = "#depositStatementForm_pull2RefreshPanel > div > div:nth-child(1) > div.DepositSelection.WithoutCashAccount.ClearFix > div.Details > table > tbody > tr:nth-child(1) > td.Value > span"
