@@ -9,6 +9,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from datetime import datetime, timezone
 import mysql.connector as mariadb
 from mysql.connector import Error
+from selenium.webdriver.common.action_chains import ActionChains
 
 # https://www.youtube.com/watch?v=Xjv1sY630Uc&list=PLzMcBGfZo4-n40rB1XaJ0ak1bemvlqumQ
 # https://selenium-python.readthedocs.io/index.html
@@ -77,6 +78,14 @@ class Position:
 def STOPHERE(text=""):
     pressed = input(f"STOPPING HERE -> {text}")
 
+def TOFILE(name, text):
+    f = open(name, "a")
+    f.write(text)
+    f.close()
+
+def SCREENSHOT(driver, name):
+    driver.save_screenshot(name)
+
 def info():
     execstring = f"SELECT table_schema 'DB Name',table_rows,ROUND(SUM(data_length + index_length) / 1024 / 1024, 1) 'DB Size in MB' FROM information_schema.tables WHERE table_schema = '{credentials.DB_NAME}'"
     cursor.execute(execstring)
@@ -99,66 +108,39 @@ def scrape_flatex(headless=False):
         options.add_argument("--headless")
 
     driver = webdriver.Chrome(options=options)
-
-
     width = driver.get_window_size().get("width")
     height = driver.get_window_size().get("height")
     print(f"driver set to {width}x{height}")
 
     # GO TO SITE
-    base_url = "https://flatex.at"
-    # base_url = "https://konto.flatex.at/login.at/loginIFrameFormAction.do"
+    # base_url = "https://flatex.at"
+    base_url = "https://konto.flatex.at/login.at/loginIFrameFormAction.do"
     print(f"Loading {base_url}")
     driver.get(base_url)
 
-    STOPHERE("before cookie banner check")
-
-    # CHECK FOR COOKIE BANNER
-    cookie_banner = WebDriverWait(driver, timeout).until(EC.visibility_of_element_located((By.ID, "SgCookieOptin")))
-    if cookie_banner:
-        print("found cookie banner.")
-        driver.execute_script("""var l = document.getElementById("SgCookieOptin"); l.parentNode.removeChild(l);""")  # FUCK YOU COOKIE BANNER
-        print("removed cookie banner.")
-    else:
-        print("no cookie banner here.")
-
-    # STOPHERE("before showing login window")
-
-    # CLICK LOGIN, WAIT FOR POPUP
-    open_login = driver.find_element(By.CSS_SELECTOR, "#pageHeader > div.inner > div:nth-child(3) > div.toggleWrapper > a")
-    open_login.click()
-
-    STOPHERE("before login fill")
-
     # FILL CREDENTIALS IN POPUP
-    # loginIFrameForm_txtUserId
-    txt_username = WebDriverWait(driver, timeout).until(EC.visibility_of_element_located((By.CSS_SELECTOR, "#loginIFrameForm_txtUserId")))
-    # txt_username = WebDriverWait(driver, timeout).until(EC.visibility_of_element_located((By.ID, "loginIFrameForm_txtUserId")))
-    txt_username.send_keys(FLATEX_USER)
-    #txt_password = driver.find_element(By.ID, "loginIFrameForm_txtPassword")
-    #txt_password.send_keys(FLATEX_PASS)
-    #loginbutton = driver.find_element(By.ID, "btnSubmitForm")
-    #loginbutton.click()
-    # time.sleep(5)
+    # STOPHERE("fill credentials")
 
-    STOPHERE("after login fill")
+    txt_username = WebDriverWait(driver, timeout).until(EC.visibility_of_element_located((By.ID, "loginIFrameForm_txtUserId_container")))
+    txt_username.click()
+    actions = ActionChains(driver)
+    actions.send_keys(FLATEX_USER)
+    actions.perform()
 
-    # DEPOTBESTAND SITE
-    #depotbestand_selector = "#depositStatementForm_pull2RefreshPanel > div > div:nth-child(1) > div.DepositSelection.WithoutCashAccount.ClearFix > div.Details > table > tbody > tr:nth-child(1) > td.Value > span"
-    #depotbestand_selector = "#titleAnchor"
-    #driver.save_screenshot("screenshot_login_form.png")
-    #print("DEPOTBESTAND GEÖFFNET")
-    ## amount = WebDriverWait(driver, timeout).until(EC.visibility_of_element_located((By.CSS_SELECTOR, depotbestand_selector)))
-    #amount = driver.find_element(By.CSS_SELECTOR, depotbestand_selector)
-    # title = WebDriverWait(driver, timeout).until(EC.visibility_of_element_located((By.ID, "titleAnchor")))
-    #print(f"Depotbestand: {amount.text}:")
+    txt_username = WebDriverWait(driver, timeout).until(EC.visibility_of_element_located((By.ID, "loginIFrameForm_txtPassword_container")))
+    txt_username.click()
+    actions.send_keys(FLATEX_PASS)
+    actions.perform()
+
+    login_button = WebDriverWait(driver, timeout).until(EC.visibility_of_element_located((By.ID, "btnSubmitForm")))
+    login_button.click()
 
     driver.get("https://konto.flatex.at/banking-flatex.at/depositStatementFormAction.do")
+    time.sleep(5)  # give it time to load, yo!
+
     title = WebDriverWait(driver, timeout).until(EC.visibility_of_element_located((By.ID, "titleAnchor")))
     print(f"{title.text}:")
 
-
-    positions = []
 
     def to_float(my_input):
         try:
@@ -171,7 +153,7 @@ def scrape_flatex(headless=False):
         input_format = "%d.%m.%Y | %H:%M"
         return datetime.strptime(my_input, input_format)
 
-    # driver.save_screenshot("screenshot_data.png")
+    positions = []
     index = 0
     while True:
         try:
