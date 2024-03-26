@@ -94,7 +94,11 @@ def info():
     size_mb = all[0][2]
     return records, size_mb
 
+
+
 def scrape_flatex(headless=False):
+
+
     timeout = 2
 
     options = webdriver.ChromeOptions()
@@ -135,10 +139,11 @@ def scrape_flatex(headless=False):
     login_button = WebDriverWait(driver, timeout).until(EC.visibility_of_element_located((By.ID, "btnSubmitForm")))
     login_button.click()
 
+    time.sleep(1)
     driver.get("https://konto.flatex.at/banking-flatex.at/depositStatementFormAction.do")
     time.sleep(5)  # give it time to load, yo!
 
-    title = WebDriverWait(driver, timeout).until(EC.visibility_of_element_located((By.ID, "titleAnchor")))
+    title = WebDriverWait(driver, timeout).until(EC.visibility_of_element_located((By.XPATH, "/html/body/div[1]/form[3]/div/div/div[1]/div[1]/div")))
     print(f"{title.text}:")
 
 
