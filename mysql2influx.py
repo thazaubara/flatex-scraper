@@ -1,6 +1,15 @@
 import csv
-import json
+import requests
 from datetime import datetime
+
+# InfluxDB server configuration
+influxdb_url = 'http://ipaddress:8086/api/v2/write?org=organisation&bucket=bucket&precision=s'
+influxdb_token = 'token'  # Add your InfluxDB token here
+headers = {
+    'Authorization': f'Token {influxdb_token}',
+    'Content-Type': 'text/plain'
+}
+
 
 # Function to safely convert values to float and handle "NULL"
 def safe_float(value):
@@ -11,19 +20,39 @@ def safe_float(value):
     except ValueError:
         return None
 
+
 # Function to convert "timestamp_utc" to Unix timestamp (in seconds)
 def convert_to_unix_timestamp(timestamp_str):
-    # Parse the timestamp from the string format
     dt = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
-    # Convert to Unix timestamp in seconds
     return int(dt.timestamp())
 
-# Define input and output file paths
+
+# Function to escape spaces in tags or field values
+def escape_spaces(value):
+    return value.replace(" ", "\\ ")
+
+
+# Convert a single dataset to InfluxDB line protocol format
+def convert_to_line_protocol(data):
+    measurement = data["measurement"]
+
+    # Escape spaces in tag values
+    tags = ','.join([f'{k}={escape_spaces(v)}' for k, v in data["tags"].items()])
+
+    # Escape spaces in field values if necessary (usually not needed for numeric fields)
+    fields = ','.join([f'{k}={v}' for k, v in data["fields"].items()])
+
+    timestamp = data["timestamp"]
+
+    line_protocol = f'{measurement},{tags} {fields} {timestamp}'
+    return line_protocol
+
+
+# Define input file path
 input_csv = 'sample.csv'  # Path to your CSV file
-output_json = 'output.json'  # Path where the JSON will be saved
 
 # Define the structure of the final data
-portfolio_data = []
+line_protocol_data = []
 
 # Open the CSV file and read the first 20 lines
 with open(input_csv, mode='r') as file:
@@ -32,8 +61,9 @@ with open(input_csv, mode='r') as file:
     # Track the number of lines processed
     line_count = 0
     for row in reader:
-        if line_count >= 2:
-            break  # Stop after processing 20 lines
+        if line_count >= 20:
+            pass
+            #break  # Stop after processing 20 lines
 
         # Generate the timestamp in seconds
         timestamp = convert_to_unix_timestamp(row["timestamp_utc"])
@@ -68,12 +98,23 @@ with open(input_csv, mode='r') as file:
                 },
                 "timestamp": timestamp  # Add the Unix timestamp
             }
-            portfolio_data.append(data_entry)
+            line_protocol = convert_to_line_protocol(data_entry)
+            line_protocol_data.append(line_protocol)
 
         line_count += 1
 
-# Save the data to a JSON file
-with open(output_json, 'w') as json_file:
-    json.dump(portfolio_data, json_file, indent=4)
 
-print(f"Data successfully saved to {output_json}")
+# Send the data to InfluxDB
+def upload_to_influxdb(line_protocol_data):
+    data = '\n'.join(line_protocol_data)  # Join all line protocol entries
+    response = requests.post(influxdb_url, headers=headers, data=data)
+
+    if response.status_code == 204:
+        print("Data successfully uploaded to InfluxDB")
+    else:
+        print(f"Failed to upload data. Status code: {response.status_code}")
+        print(f"Response: {response.text}")
+
+
+# Upload the line protocol data to InfluxDB
+upload_to_influxdb(line_protocol_data)
